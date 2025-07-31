@@ -1,0 +1,133 @@
+import os.path
+import logging
+import torch
+import sys
+sys.path.append('/content/drive/MyDrive')
+import numpy as np
+from VideoUpScaling.utils import utils_logger
+from VideoUpScaling.utils import utils_image as util
+# from utils import utils_model
+from VideoUpScaling.models.network_rrdbnet import RRDBNet as net
+import argparse
+
+"""
+Spyder (Python 3.6-3.7)
+PyTorch 1.4.0-1.8.1
+Windows 10 or Linux
+Kai Zhang (cskaizhang@gmail.com)
+github: https://github.com/cszn/BSRGAN
+        https://github.com/cszn/KAIR
+If you have any question, please feel free to contact with me.
+Kai Zhang (e-mail: cskaizhang@gmail.com)
+by Kai Zhang ( March/2020 --> March/2021 --> )
+This work was previously submitted to CVPR2021.
+
+# --------------------------------------------
+@inproceedings{zhang2021designing,
+  title={Designing a Practical Degradation Model for Deep Blind Image Super-Resolution},
+  author={Zhang, Kai and Liang, Jingyun and Van Gool, Luc and Timofte, Radu},
+  booktitle={arxiv},
+  year={2021}
+}
+# --------------------------------------------
+
+"""
+
+
+class BSRGAN:
+    def __init__(self,model_names,scale_factor):
+        self.model_names=model_names
+        self.scale_factor=scale_factor
+    def Enhance(self,input):
+      
+        # parser = argparse.ArgumentParser()
+        # parser.add_argument('--input',type=str,required=True, help='input path')
+        # args = parser.parse_args()
+        utils_logger.logger_info('blind_sr_log', log_path='blind_sr_log.log')
+        logger = logging.getLogger('blind_sr_log')
+
+        #    print(torch.__version__)               # pytorch version
+        #    print(torch.version.cuda)              # cuda version
+        #    print(torch.backends.cudnn.version())  # cudnn version
+
+        testsets = 'testsets'       # fixed, set path of testsets
+        # testset_Ls = ['RealSRSet']  # ['RealSRSet','DPED']
+
+        # model_names = ['RRDB','ESRGAN','FSSR_DPED','FSSR_JPEG','RealSR_DPED','RealSR_JPEG']
+        # model_names = ['BSRGAN']    # 'BSRGANx2' for scale factor 2
+
+        save_results = True
+        sf = self.scale_factor
+        device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
+
+        for model_name in self.model_names:
+            if model_name in ['BSRGANx2']:
+                sf = 2 
+            model_path = os.path.join("/content/drive/MyDrive/VideoUpScaling/model_zoo", model_name+'.pth')          # set model path
+            # logger.info('{:>16s} : {:s}'.format('Model Name', model_name))
+            if device=="cuda":
+              torch.cuda.set_device(0)      # set GPU ID
+              logger.info('{:>16s} : {:<d}'.format('GPU ID', torch.cuda.current_device()))
+              torch.cuda.empty_cache()
+
+            # --------------------------------
+            # define network and load model
+            # --------------------------------
+            model = net(in_nc=3, out_nc=3, nf=64, nb=23, gc=32, sf=sf)  # define network
+
+        #            model_old = torch.load(model_path)
+        #            state_dict = model.state_dict()
+        #            for ((key, param),(key2, param2)) in zip(model_old.items(), state_dict.items()):
+        #                state_dict[key2] = param
+        #            model.load_state_dict(state_dict, strict=True)
+
+            model.load_state_dict(torch.load(model_path), strict=True)
+            model.eval()
+            for k, v in model.named_parameters():
+                v.requires_grad = False
+            model = model.to(device)
+            if device=="cuda":
+                torch.cuda.empty_cache()
+
+            # for testset_L in testset_Ls:
+
+                # L_path = os.path.join(testsets, testset_L)
+                # #E_path = os.path.join(testsets, testset_L+'_'+model_name)
+                # E_path = os.path.join(testsets, testset_L+'_results_x'+str(sf))
+                # util.mkdir(E_path)
+
+                # logger.info('{:>16s} : {:s}'.format('Input Path', L_path))
+                # logger.info('{:>16s} : {:s}'.format('Output Path', E_path))
+                # idx = 0
+
+                # for img in util.get_image_paths(L_path):
+
+                #     # --------------------------------
+                #     # (1) img_L
+                #     # --------------------------------
+                #     idx += 1
+                #     img_name, ext = os.path.splitext(os.path.basename(img))
+                #     logger.info('{:->4d} --> {:<s} --> x{:<d}--> {:<s}'.format(idx, model_name, sf, img_name+ext))
+            # out_path = os.path.join(testsets, input+str(sf))
+            # util.mkdir(out_path)
+            img_L = None
+            if isinstance(input, str) and os.path.isfile(input):
+                # Case 1: input là đường dẫn ảnh
+                out_path = os.path.join(testsets, os.path.splitext(os.path.basename(input))[0] + f"_x{sf}")
+                util.mkdir(out_path)
+                img_L = util.imread_uint(input, n_channels=3)
+            elif isinstance(input, np.ndarray):
+                # Case 2: input là ảnh numpy array (tile)
+                img_L = input
+            else:
+                raise ValueError("self.input phải là đường dẫn hợp lệ hoặc numpy.ndarray")
+
+            # === Tiếp tục xử lý ===
+            img_L = util.uint2tensor4(img_L)
+            img_L = img_L.to(device)
+
+            # inference
+            img_E = model(img_L)
+            img_E = util.tensor2uint(img_E)
+
+            return img_E

@@ -1,0 +1,5 @@
+Person
+Protective_Shoes
+Slippers
+Head
+Fire_extinguisher

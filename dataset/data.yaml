@@ -1,0 +1,10 @@
+path: .
+train: train.txt
+val: val.txt
+nc: 5
+names:
+  - Heads
+  - Person
+  - Slippers
+  - Fire_extinguisher
+  - Protective_Shoes
